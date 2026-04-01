@@ -29,15 +29,6 @@ Processamento / Robô
 
 ---
 
-## 📦 Tecnologias utilizadas
-
-* ESP32 (Arduino Framework)
-* WiFi.h / WebServer.h
-* Android (Kotlin + Jetpack Compose)
-* HTTP (GET)
-
----
-
 ## 🔧 Configuração do ESP32
 
 1. Abra o código no Arduino IDE
