@@ -1,22 +1,59 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-// Dados do WiFi
 const char* ssid = "Husky";
 const char* password = "kaua12345";
 
 WebServer server(80);
 
-// Declara função
-void receberGyro();
+unsigned long ultimoPacote = 0;
+const int timeout = 2000; 
 
 void handleRoot() {
-  String html = "<html><body>";
-  html += "<h1>Servidor ESP32</h1>";
-  html += "<p>Status: ONLINE</p>";
-  html += "</body></html>";
+  server.send(200, "text/plain", "ESP32 ONLINE");
+}
 
-  server.send(200, "text/html", html);
+void receberGyro() {
+
+  if (!server.hasArg("x") || !server.hasArg("y") || !server.hasArg("z")) {
+    server.send(400, "text/plain", "ERRO: parametros faltando");
+    Serial.println("ERRO: faltando parametros");
+    return;
+  }
+
+  String xStr = server.arg("x");
+  String yStr = server.arg("y");
+  String zStr = server.arg("z");
+
+  float x = xStr.toFloat();
+  float y = yStr.toFloat();
+  float z = zStr.toFloat();
+
+  if (isnan(x) || isnan(y) || isnan(z)) {
+    server.send(400, "text/plain", "ERRO: valores invalidos");
+    Serial.println("ERRO: dados invalidos");
+    return;
+  }
+
+  if (abs(x) > 50 || abs(y) > 50 || abs(z) > 50) {
+    server.send(400, "text/plain", "ERRO: valores fora do limite");
+    Serial.println("ERRO: valores fora do limite");
+    return;
+  }
+
+  ultimoPacote = millis();
+
+  // ✔️ Print bonito
+  Serial.println("------ GYRO OK ------");
+  Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", x, y, z);
+  Serial.println("---------------------");
+
+  server.send(200, "text/plain", "OK");
+}
+
+void handleNotFound() {
+  Serial.println("Rota inexistente acessada");
+  server.send(404, "text/plain", "Rota nao encontrada");
 }
 
 void setup() {
@@ -36,29 +73,16 @@ void setup() {
 
   server.on("/", handleRoot);
   server.on("/gyro", receberGyro);
+  server.onNotFound(handleNotFound);
 
   server.begin();
 }
-
 void loop() {
   server.handleClient();
-}
 
-// 👇 Função de receber dados
-void receberGyro() {
-  String x = server.arg("x");
-  String y = server.arg("y");
-  String z = server.arg("z");
-
-  Serial.println("------ GYRO ------");
-  Serial.print("X: ");
-  Serial.println(x);
-  Serial.print("Y: ");
-  Serial.println(y);
-  Serial.print("Z: ");
-  Serial.println(z);
-
-  Serial.println("------------------");
-
-  server.send(200, "text/plain", "OK");
+  //  Detecta perda de conexão (sem dados)
+  if (millis() - ultimoPacote > timeout) {
+    Serial.println("⚠️ SEM DADOS DO CELULAR!");
+    delay(1000); 
+  }
 }
