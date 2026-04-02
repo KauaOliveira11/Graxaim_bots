@@ -1,7 +1,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 
-//  ESP32 vira Wi-Fi
+// ================= WIFI =================
 const char* ssid = "ESP_ROBO";
 const char* password = "12345678";
 
@@ -17,7 +17,7 @@ void handleRoot() {
 
 // ================= PING =================
 void handlePing() {
-  Serial.println(" Ping recebido!");
+  Serial.println("📡 Ping recebido!");
 
   String resposta = "{";
   resposta += "\"status\":\"ok\",";
@@ -31,15 +31,8 @@ void handlePing() {
 // ================= GYRO =================
 void receberGyro() {
 
-  Serial.print(" Cliente: ");
-  Serial.println(server.client().remoteIP());
-
-  Serial.print(" URL: ");
-  Serial.println(server.uri());
-
   if (!server.hasArg("x") || !server.hasArg("y") || !server.hasArg("z")) {
     server.send(400, "text/plain", "ERRO: parametros faltando");
-    Serial.println(" ERRO: faltando parametros");
     return;
   }
 
@@ -48,29 +41,56 @@ void receberGyro() {
   float z = server.arg("z").toFloat();
 
   if (isnan(x) || isnan(y) || isnan(z)) {
-    server.send(400, "text/plain", "ERRO: valores invalidos");
-    Serial.println(" ERRO: dados invalidos");
-    return;
-  }
-
-  if (abs(x) > 50 || abs(y) > 50 || abs(z) > 50) {
-    server.send(400, "text/plain", "ERRO: valores fora do limite");
-    Serial.println(" ERRO: valores fora do limite");
+    server.send(400, "text/plain", "ERRO: dados invalidos");
     return;
   }
 
   ultimoPacote = millis();
 
-  Serial.println("------ GYRO OK ------");
+  Serial.println("------ GYRO ------");
   Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", x, y, z);
-  Serial.println("---------------------");
+
+  server.send(200, "text/plain", "OK");
+}
+
+// ================= BUSSOLA =================
+void receberCompass() {
+
+  if (!server.hasArg("angle")) {
+    server.send(400, "text/plain", "ERRO: faltando angulo");
+    return;
+  }
+
+  float angulo = server.arg("angle").toFloat();
+
+  if (isnan(angulo)) {
+    server.send(400, "text/plain", "ERRO: angulo invalido");
+    return;
+  }
+
+  ultimoPacote = millis();
+
+  Serial.println("------ BUSSOLA ------");
+  Serial.printf("Angulo: %.1f°\n", angulo);
+
+  // EXEMPLO: interpretar direção
+  if (angulo >= 315 || angulo < 45) {
+    Serial.println("Direcao: NORTE ↑");
+  } else if (angulo >= 45 && angulo < 135) {
+    Serial.println("Direcao: LESTE →");
+  } else if (angulo >= 135 && angulo < 225) {
+    Serial.println("Direcao: SUL ↓");
+  } else {
+    Serial.println("Direcao: OESTE ←");
+  }
 
   server.send(200, "text/plain", "OK");
 }
 
 // ================= ERRO =================
 void handleNotFound() {
-  Serial.println(" Rota inexistente acessada");
+  Serial.print("❌ Rota inexistente: ");
+  Serial.println(server.uri());
   server.send(404, "text/plain", "Rota nao encontrada");
 }
 
@@ -80,13 +100,14 @@ void setup() {
 
   WiFi.softAP(ssid, password);
 
-  Serial.println(" ESP32 AP iniciado!");
-  Serial.print(" IP: ");
-  Serial.println(WiFi.softAPIP()); // normalmente 192.168.4.1
+  Serial.println("🚀 ESP32 AP iniciado!");
+  Serial.print("📡 IP: ");
+  Serial.println(WiFi.softAPIP());
 
   server.on("/", handleRoot);
   server.on("/ping", handlePing);
   server.on("/gyro", receberGyro);
+  server.on("/compass", receberCompass); // 🔥 NOVO
   server.onNotFound(handleNotFound);
 
   server.begin();
@@ -96,11 +117,14 @@ void setup() {
 void loop() {
   server.handleClient();
 
+  // sem cliente conectado
   if (WiFi.softAPgetStationNum() == 0) {
     Serial.println("⚠️ Nenhum celular conectado!");
     delay(1000);
+    return;
   }
 
+  // sem dados do app
   if (millis() - ultimoPacote > timeout) {
     Serial.println("⚠️ SEM DADOS DO APP!");
     delay(1000);
