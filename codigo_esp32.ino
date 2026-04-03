@@ -1,12 +1,36 @@
+//Kaua Silva Olivera
+//Engenharia de controle e automacao furg
+
 #include <WiFi.h>
 #include <WebServer.h>
 
+// ================= CONFIG =================
+#define MODO_SERIAL 2  
+// 1 = DEBUG
+// 2 = CSV
+
+// ================= ORDEM DAS COISAS  QUE APARECEM NO SEIRAL MEU CHAPA ENRIENW =================
+// x ; y ; z ; angle ; mx ; my ; mz ; mag
+// | Posição | Nome  | Descrição                      |
+// | ------- | ----- | ------------------------------ |
+// | 1       | x     | Giroscópio eixo X              |
+// | 2       | y     | Giroscópio eixo Y              |
+// | 3       | z     | Giroscópio eixo Z              |
+// | 4       | angle | Bússola (azimuth em graus)     |
+// | 5       | mx    | Magnetômetro eixo X            |
+// | 6       | my    | Magnetômetro eixo Y            |
+// | 7       | mz    | Magnetômetro eixo Z            |
+// | 8       | mag   | Intensidade do campo magnético |
+
+//D A VOM OU QUER MAIS MEUS GRAXAMANOS
+// SIM TO COM TEMPO PRA FAZER GRACA
 // ================= WIFI =================
 const char* ssid = "ESP_ROBO";
 const char* password = "12345678";
 
 WebServer server(80);
 
+// ================= CONTROLE =================
 unsigned long ultimoPacote = 0;
 const int timeout = 2000;
 
@@ -30,18 +54,12 @@ void handlePing() {
 // ================= STATUS =================
 void receberStatus() {
 
-  // 🔥 VALIDAÇÃO COMPLETA
   if (!server.hasArg("x") || !server.hasArg("y") || !server.hasArg("z") ||
-      !server.hasArg("angle") ||
-      !server.hasArg("mx") || !server.hasArg("my") || !server.hasArg("mz") ||
-      !server.hasArg("mag")) {
-
-    server.send(400, "text/plain", "ERRO: parametros faltando");
-    Serial.println("❌ Parametros faltando");
+      !server.hasArg("angle")) {
+    server.send(400, "text/plain", "Parametros faltando");
     return;
   }
 
-  // 🔥 LEITURA
   float x = server.arg("x").toFloat();
   float y = server.arg("y").toFloat();
   float z = server.arg("z").toFloat();
@@ -52,44 +70,28 @@ void receberStatus() {
   float mz = server.arg("mz").toFloat();
   float mag = server.arg("mag").toFloat();
 
-  // 🔥 VALIDAÇÃO DE DADOS
-  if (isnan(x) || isnan(y) || isnan(z) ||
-      isnan(angle) ||
-      isnan(mx) || isnan(my) || isnan(mz) || isnan(mag)) {
-
-    server.send(400, "text/plain", "ERRO: dados invalidos");
-    Serial.println("❌ Dados invalidos");
-    return;
-  }
-
   ultimoPacote = millis();
 
-  // ================= PRINT BONITO =================
-  Serial.println("\n====== 📡 STATUS RECEBIDO ======");
+  // ================= DEBUG =================
+#if MODO_SERIAL == 1
 
-  Serial.printf("🎯 GYRO\n");
-  Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", x, y, z);
+  Serial.println("------ STATUS ------");
+  Serial.printf("Gyro -> X: %.2f | Y: %.2f | Z: %.2f\n", x, y, z);
+  Serial.printf("Bussola -> %.1f°\n", angle);
+  Serial.printf("Mag -> X: %.2f | Y: %.2f | Z: %.2f | Campo: %.2f\n", mx, my, mz, mag);
+  Serial.println("--------------------");
 
-  Serial.printf("\n🧭 BUSSOLA\n");
-  Serial.printf("Angulo: %.1f°\n", angle);
+#endif
 
-  if (angle >= 315 || angle < 45) {
-    Serial.println("Direcao: NORTE ↑");
-  } else if (angle >= 45 && angle < 135) {
-    Serial.println("Direcao: LESTE →");
-  } else if (angle >= 135 && angle < 225) {
-    Serial.println("Direcao: SUL ↓");
-  } else {
-    Serial.println("Direcao: OESTE ←");
-  }
+  // ================= CSV =================
+#if MODO_SERIAL == 2
 
-  Serial.printf("\n🧲 MAGNETOMETRO\n");
-  Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", mx, my, mz);
+  // formato:
+  // x;y;z;angle;mx;my;mz;mag
+  Serial.printf("%.2f;%.2f;%.2f;%.1f;%.2f;%.2f;%.2f;%.2f\n",
+                x, y, z, angle, mx, my, mz, mag);
 
-  Serial.printf("\n⚡ CAMPO MAGNETICO\n");
-  Serial.printf("Intensidade: %.2f µT\n", mag);
-
-  Serial.println("================================\n");
+#endif
 
   server.send(200, "text/plain", "OK");
 }
@@ -107,14 +109,19 @@ void setup() {
 
   WiFi.softAP(ssid, password);
 
-  Serial.println("🚀 ESP32 iniciado!");
+  Serial.println("🚀 ESP32 INICIADO");
   Serial.print("📡 IP: ");
   Serial.println(WiFi.softAPIP());
+
+#if MODO_SERIAL == 1
+  Serial.println("🟢 MODO DEBUG ATIVO");
+#else
+  Serial.println("🟢 MODO CSV ATIVO");
+#endif
 
   server.on("/", handleRoot);
   server.on("/ping", handlePing);
   server.on("/status", receberStatus);
-
   server.onNotFound(handleNotFound);
 
   server.begin();
@@ -122,19 +129,16 @@ void setup() {
 
 // ================= LOOP =================
 void loop() {
-
   server.handleClient();
 
-  // 🔥 SEM CLIENTE
   if (WiFi.softAPgetStationNum() == 0) {
-    Serial.println("⚠️ Nenhum celular conectado!");
+    Serial.println("⚠️ Sem cliente conectado");
     delay(1000);
     return;
   }
 
-  // 🔥 SEM DADOS
   if (millis() - ultimoPacote > timeout) {
-    Serial.println("⚠️ SEM DADOS DO APP!");
+    Serial.println("⚠️ Sem dados do app");
     delay(1000);
   }
 }
