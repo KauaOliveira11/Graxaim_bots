@@ -17,7 +17,6 @@ void handleRoot() {
 
 // ================= PING =================
 void handlePing() {
-  Serial.println("📡 Ping recebido!");
 
   String resposta = "{";
   resposta += "\"status\":\"ok\",";
@@ -28,68 +27,76 @@ void handlePing() {
   server.send(200, "application/json", resposta);
 }
 
-// ================= GYRO =================
-void receberGyro() {
+// ================= STATUS =================
+void receberStatus() {
 
-  if (!server.hasArg("x") || !server.hasArg("y") || !server.hasArg("z")) {
+  // 🔥 VALIDAÇÃO COMPLETA
+  if (!server.hasArg("x") || !server.hasArg("y") || !server.hasArg("z") ||
+      !server.hasArg("angle") ||
+      !server.hasArg("mx") || !server.hasArg("my") || !server.hasArg("mz") ||
+      !server.hasArg("mag")) {
+
     server.send(400, "text/plain", "ERRO: parametros faltando");
+    Serial.println("❌ Parametros faltando");
     return;
   }
 
+  // 🔥 LEITURA
   float x = server.arg("x").toFloat();
   float y = server.arg("y").toFloat();
   float z = server.arg("z").toFloat();
+  float angle = server.arg("angle").toFloat();
 
-  if (isnan(x) || isnan(y) || isnan(z)) {
+  float mx = server.arg("mx").toFloat();
+  float my = server.arg("my").toFloat();
+  float mz = server.arg("mz").toFloat();
+  float mag = server.arg("mag").toFloat();
+
+  // 🔥 VALIDAÇÃO DE DADOS
+  if (isnan(x) || isnan(y) || isnan(z) ||
+      isnan(angle) ||
+      isnan(mx) || isnan(my) || isnan(mz) || isnan(mag)) {
+
     server.send(400, "text/plain", "ERRO: dados invalidos");
+    Serial.println("❌ Dados invalidos");
     return;
   }
 
   ultimoPacote = millis();
 
-  Serial.println("------ GYRO ------");
+  // ================= PRINT BONITO =================
+  Serial.println("\n====== 📡 STATUS RECEBIDO ======");
+
+  Serial.printf("🎯 GYRO\n");
   Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", x, y, z);
 
-  server.send(200, "text/plain", "OK");
-}
+  Serial.printf("\n🧭 BUSSOLA\n");
+  Serial.printf("Angulo: %.1f°\n", angle);
 
-// ================= BUSSOLA =================
-void receberCompass() {
-
-  if (!server.hasArg("angle")) {
-    server.send(400, "text/plain", "ERRO: faltando angulo");
-    return;
-  }
-
-  float angulo = server.arg("angle").toFloat();
-
-  if (isnan(angulo)) {
-    server.send(400, "text/plain", "ERRO: angulo invalido");
-    return;
-  }
-
-  ultimoPacote = millis();
-
-  Serial.println("------ BUSSOLA ------");
-  Serial.printf("Angulo: %.1f°\n", angulo);
-
-  // EXEMPLO: interpretar direção
-  if (angulo >= 315 || angulo < 45) {
+  if (angle >= 315 || angle < 45) {
     Serial.println("Direcao: NORTE ↑");
-  } else if (angulo >= 45 && angulo < 135) {
+  } else if (angle >= 45 && angle < 135) {
     Serial.println("Direcao: LESTE →");
-  } else if (angulo >= 135 && angulo < 225) {
+  } else if (angle >= 135 && angle < 225) {
     Serial.println("Direcao: SUL ↓");
   } else {
     Serial.println("Direcao: OESTE ←");
   }
+
+  Serial.printf("\n🧲 MAGNETOMETRO\n");
+  Serial.printf("X: %.2f | Y: %.2f | Z: %.2f\n", mx, my, mz);
+
+  Serial.printf("\n⚡ CAMPO MAGNETICO\n");
+  Serial.printf("Intensidade: %.2f µT\n", mag);
+
+  Serial.println("================================\n");
 
   server.send(200, "text/plain", "OK");
 }
 
 // ================= ERRO =================
 void handleNotFound() {
-  Serial.print("❌ Rota inexistente: ");
+  Serial.print("❌ Rota invalida: ");
   Serial.println(server.uri());
   server.send(404, "text/plain", "Rota nao encontrada");
 }
@@ -100,14 +107,14 @@ void setup() {
 
   WiFi.softAP(ssid, password);
 
-  Serial.println("🚀 ESP32 AP iniciado!");
+  Serial.println("🚀 ESP32 iniciado!");
   Serial.print("📡 IP: ");
   Serial.println(WiFi.softAPIP());
 
   server.on("/", handleRoot);
   server.on("/ping", handlePing);
-  server.on("/gyro", receberGyro);
-  server.on("/compass", receberCompass); // 🔥 NOVO
+  server.on("/status", receberStatus);
+
   server.onNotFound(handleNotFound);
 
   server.begin();
@@ -115,16 +122,17 @@ void setup() {
 
 // ================= LOOP =================
 void loop() {
+
   server.handleClient();
 
-  // sem cliente conectado
+  // 🔥 SEM CLIENTE
   if (WiFi.softAPgetStationNum() == 0) {
     Serial.println("⚠️ Nenhum celular conectado!");
     delay(1000);
     return;
   }
 
-  // sem dados do app
+  // 🔥 SEM DADOS
   if (millis() - ultimoPacote > timeout) {
     Serial.println("⚠️ SEM DADOS DO APP!");
     delay(1000);
